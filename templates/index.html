@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Ugobest Africa Paint | Customer Support</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <div class="chat-container">
+
+        <!-- HEADER -->
+        <header class="chat-header">
+
+            <div class="brand">
+                <div class="brand-logo">U</div>
+
+                <div class="brand-info">
+                    <h2>Ugobest Africa Paint</h2>
+                    <span>
+                        <span class="online-dot"></span>
+                        Customer Support Online
+                    </span>
+                </div>
+            </div>
+
+            <button id="new-chat-btn" class="new-chat-btn">
+                + New Chat
+            </button>
+
+        </header>
+
+
+        <!-- CHAT BODY -->
+        <main class="chat-body">
+
+            <div class="welcome-section">
+
+                <div class="bot-avatar">U</div>
+
+                <h1>Welcome to Ugobest Africa Paint!</h1>
+
+                <p>
+                    Hello! I'm your virtual customer service assistant.
+                    How can I help you today?
+                </p>
+
+            </div>
+
+
+            <!-- SUGGESTED QUESTIONS -->
+            <div class="suggestions">
+
+                <button class="suggestion-btn">
+                    What paint products do you offer?
+                </button>
+
+                <button class="suggestion-btn">
+                    What makes your paint special?
+                </button>
+
+                <button class="suggestion-btn">
+                    How can I place an order?
+                </button>
+
+                <button class="suggestion-btn">
+                    How do I get a price quotation?
+                </button>
+
+            </div>
+
+
+            <!-- MESSAGES -->
+            <div id="chat-messages" class="chat-messages" aria-live="polite">
+
+                <div class="message bot-message">
+                    <div class="message-avatar">U</div>
+
+                    <div class="message-content">
+                        Welcome! Thank you for contacting Ugobest
+                        Africa Paint. We are happy to assist you.
+                        What would you like to know about our products?
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="typing-indicator" class="typing-indicator hidden">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+        </main>
+
+
+        <!-- CHAT INPUT -->
+        <footer class="chat-footer">
+
+            <form id="chat-form">
+
+                <textarea
+                    id="user-input"
+                    placeholder="Type your message here..."
+                    rows="1"
+                    maxlength="3000"
+                    required
+                ></textarea>
+
+                <button type="submit" id="send-btn">
+                    Send
+                    <span>➤</span>
+                </button>
+
+            </form>
+
+            <p class="footer-note">
+                Powered by Gemini AI | Ugobest Africa Paint
+            </p>
+
+        </footer>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
