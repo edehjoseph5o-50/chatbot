@@ -1,27 +1,34 @@
 import os
+import uuid
+
 from flask import Flask, request, jsonify, render_template
-from flask import Flask, request, jsonify, send_from_directory
 from dotenv import load_dotenv
-from google import genai
+from openai import OpenAI
 
 
 # LOAD ENVIRONMENT VARIABLES
 load_dotenv()
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__)
 
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
 
 
-# GEMINI CONFIGURATION
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# NVIDIA CONFIGURATION
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
-GEMINI_MODEL = os.getenv(
-    "GEMINI_MODEL",
-    "gemini-3.6-flash"
+NVIDIA_MODEL = os.getenv(
+    "NVIDIA_MODEL",
+    "nvidia/nemotron-3.5-super-vl-120b-a12b"
 )
+
+client = None
+
+if NVIDIA_API_KEY:
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=NVIDIA_API_KEY
+    )
 
 
 # BUSINESS INFORMATION
@@ -37,23 +44,13 @@ BUSINESS_DESCRIPTION = os.getenv(
 
 BUSINESS_KNOWLEDGE = os.getenv(
     "BUSINESS_KNOWLEDGE",
-    "Our paint offers high-quality coverage and anti-fade performance."
+    "Ugobest Africa Paint offers high-quality coverage and anti-fade performance."
 )
 
-SUPPORT_CONTACT = os.getenv(
-    "SUPPORT_CONTACT",
-    ""
-)
+SUPPORT_CONTACT = os.getenv("SUPPORT_CONTACT", "")
 
 
-# INITIALIZE GEMINI CLIENT
-client = None
-
-if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
-
-# CUSTOMER SERVICE SYSTEM INSTRUCTIONS
+# CUSTOMER SERVICE INSTRUCTIONS
 SYSTEM_INSTRUCTION = f"""
 You are the official AI customer service assistant for
 {BUSINESS_NAME}.
@@ -61,106 +58,56 @@ You are the official AI customer service assistant for
 BUSINESS DESCRIPTION:
 {BUSINESS_DESCRIPTION}
 
-BUSINESS INFORMATION:
+BUSINESS KNOWLEDGE:
 {BUSINESS_KNOWLEDGE}
 
-YOUR ROLE:
+YOUR RESPONSIBILITIES:
 
-1. Welcome customers politely and professionally.
-
+1. Welcome customers politely.
 2. Answer questions about the business and its products.
-
-3. Explain product benefits in simple, understandable English.
-
-4. Help customers understand how to make enquiries and place orders.
-
-5. Assist customers with general product questions.
-
-6. Maintain a friendly, helpful and professional tone.
-
-7. Keep answers clear and reasonably short.
-
-8. Understand and respond to natural English and Nigerian English.
-
-IMPORTANT PRODUCT INFORMATION:
-
-Ugobest Africa Paint is known for high-quality paint coverage
-and anti-fade performance.
-
-Explain these benefits when relevant.
+3. Explain product benefits in simple English.
+4. Help customers with product enquiries and orders.
+5. Maintain a friendly and professional tone.
+6. Understand Nigerian English.
 
 IMPORTANT RULES:
 
-1. Only provide business information that is available in your
-business knowledge.
-
-2. NEVER invent product prices, product sizes, colours, stock
-availability, delivery charges, warranties or technical specifications.
-
-3. If you do not know an answer, politely explain that the information
-needs confirmation from the sales team.
-
-4. Never claim that an order has been placed or payment received.
-
-5. Never request customer passwords, ATM card numbers or other
-sensitive payment information.
-
+1. Only provide information supported by the available business knowledge.
+2. Never invent prices, product sizes, colours, stock availability,
+delivery charges or technical specifications.
+3. If you do not know an answer, recommend contacting the sales team.
+4. Never claim an order has been placed or payment received.
+5. Never request passwords, ATM card details or sensitive information.
 6. Do not make promises on behalf of the business.
 
-7. If a customer wants to purchase a product, guide them towards
-contacting the sales team.
-
 SUPPORT CONTACT:
+{SUPPORT_CONTACT if SUPPORT_CONTACT else "No verified support contact is currently available."}
 
-{SUPPORT_CONTACT if SUPPORT_CONTACT else "No verified customer support contact has been configured yet. Do not invent a phone number, email address or contact link."}
+RESPONSE FORMATTING:
 
-CONVERSATION STYLE:
+- Use clean, professional and natural language.
+- Always respond in plain text.
+- Do not use Markdown formatting.
+- Do not use asterisks or unnecessary symbols.
+- Avoid Markdown headings and code blocks.
+- Use short paragraphs and numbered lists when necessary.
+- Keep responses clear and customer-friendly.
 
-Be welcoming.
-Be professional.
-Be helpful.
-Use simple English.
-Avoid unnecessarily long responses.
-
-
-
-Always represent {BUSINESS_NAME} positively and professionally.
-
-FORMATTING RULES:
-- Always respond in clean, plain text.
-- Never use Markdown formatting.
-- Do not use ** for bold text.
-- Do not use * for italic text.
-- Do not use Markdown headings or code blocks.
-- Use simple paragraphs and numbered lists when necessary.
-- Responses should look natural in a customer service chat interface
-
+Always represent {BUSINESS_NAME} professionally.
 """
 
 
+# TEMPORARY CONVERSATION STORAGE
+# Conversations remain available while Flask is running.
+conversations = {}
+
+MAX_HISTORY_MESSAGES = 20
+
+
+# HOME PAGE
 @app.route("/")
 def home():
     return render_template("index.html")
-
-
-# SERVE CSS
-@app.route("/style.css")
-def stylesheet():
-
-    return send_from_directory(
-        BASE_DIR,
-        "style.css"
-    )
-
-
-# SERVE JAVASCRIPT
-@app.route("/script.js")
-def javascript():
-
-    return send_from_directory(
-        BASE_DIR,
-        "script.js"
-    )
 
 
 # HEALTH CHECK
@@ -168,13 +115,9 @@ def javascript():
 def health_check():
 
     return jsonify({
-
         "status": "running",
-
-        "model": GEMINI_MODEL,
-
-        "gemini_configured": client is not None
-
+        "model": NVIDIA_MODEL,
+        "nvidia_configured": client is not None
     })
 
 
@@ -184,137 +127,134 @@ def chat():
 
     try:
 
-        # CHECK API KEY
+        # CHECK NVIDIA API KEY
         if client is None:
-
             return jsonify({
-
-                "error": "Gemini API key is missing. Please configure your .env file."
-
+                "error": "NVIDIA API key is missing. Check your .env file."
             }), 503
-
 
         # GET CUSTOMER MESSAGE
         data = request.get_json(silent=True)
 
         if not isinstance(data, dict):
-
             return jsonify({
-
-                "error": "Invalid request. Please send a valid JSON message."
-
+                "error": "Invalid request."
             }), 400
 
-
         message = data.get("message", "")
-
         conversation_id = data.get("conversation_id")
-
 
         # VALIDATE MESSAGE
         if not isinstance(message, str):
-
             return jsonify({
-
-                "error": "Your message must be text."
-
+                "error": "Message must be text."
             }), 400
-
 
         message = message.strip()
 
         if not message:
-
             return jsonify({
-
                 "error": "Please enter a message."
-
             }), 400
-
 
         if len(message) > 3000:
-
             return jsonify({
-
-                "error": "Your message is too long. Please use fewer than 3000 characters."
-
+                "error": "Message is too long. Maximum is 3000 characters."
             }), 400
 
+        # CREATE OR VALIDATE CONVERSATION
+        if (
+            not isinstance(conversation_id, str)
+            or conversation_id not in conversations
+        ):
+            conversation_id = str(uuid.uuid4())
 
-        # VALIDATE CONVERSATION ID
-        if conversation_id is not None:
+        # GET PREVIOUS CONVERSATION HISTORY
+        history = conversations.get(conversation_id, [])
 
-            if (
-                not isinstance(conversation_id, str)
-                or len(conversation_id) > 300
-            ):
+        # PREPARE MESSAGES FOR NVIDIA
+        messages = [
+            {
+                "role": "system",
+                "content": SYSTEM_INSTRUCTION
+            }
+        ]
 
-                return jsonify({
+        messages.extend(history)
 
-                    "error": "Invalid conversation. Please start a new chat."
+        messages.append({
+            "role": "user",
+            "content": message
+        })
 
-                }), 400
+        # SEND REQUEST TO NVIDIA
+        completion = client.chat.completions.create(
 
+            model=NVIDIA_MODEL,
 
-        # PREPARE GEMINI REQUEST
-        request_arguments = {
+            messages=messages,
 
-            "model": GEMINI_MODEL,
+            temperature=1,
 
-            "input": message,
+            top_p=0.95,
 
-            "system_instruction": SYSTEM_INSTRUCTION,
+            max_tokens=4096,
 
-        }
+            stream=False,
 
-
-        # CONTINUE PREVIOUS CONVERSATION
-        if conversation_id:
-
-            request_arguments["previous_interaction_id"] = conversation_id
-
-
-        # SEND CUSTOMER MESSAGE TO GEMINI
-        response = client.interactions.create(
-            **request_arguments
+            extra_body={
+                "chat_template_kwargs": {
+                    "enable_thinking": False
+                }
+            }
         )
 
-
         # GET AI RESPONSE
-        bot_reply = response.output_text
-
+        bot_reply = completion.choices[0].message.content
 
         if not bot_reply:
 
             bot_reply = (
-                "I'm sorry, I couldn't generate a response. "
+                "Sorry, I couldn't generate a response. "
                 "Please try again."
             )
 
+        # SAVE CONVERSATION HISTORY
+        updated_history = history + [
+            {
+                "role": "user",
+                "content": message
+            },
+            {
+                "role": "assistant",
+                "content": bot_reply
+            }
+        ]
 
-        # RETURN RESPONSE TO WEBSITE
+        conversations[conversation_id] = (
+            updated_history[-MAX_HISTORY_MESSAGES:]
+        )
+
+        # RETURN RESPONSE TO FRONTEND
         return jsonify({
 
             "reply": bot_reply,
 
-            "conversation_id": response.id,
+            "conversation_id": conversation_id,
 
-            "model": GEMINI_MODEL
+            "model": NVIDIA_MODEL
 
         })
 
-
     except Exception:
 
-        app.logger.exception("Gemini customer service error")
+        app.logger.exception("NVIDIA customer service error")
 
         return jsonify({
-
             "error": (
                 "Sorry, we are experiencing a temporary issue. "
-                "Please try again shortly."
+                "Please try again."
             )
-
         }), 500
 
 
@@ -323,9 +263,7 @@ def chat():
 def request_too_large(error):
 
     return jsonify({
-
         "error": "Your request is too large."
-
     }), 413
 
 
@@ -333,11 +271,7 @@ def request_too_large(error):
 if __name__ == "__main__":
 
     app.run(
-
         host="127.0.0.1",
-
         port=5000,
-
         debug=True
-
     )
